@@ -116,6 +116,9 @@ Files are saved in: `<DATA_PATH>/<product_type>/<timestamp>_<device_ip>.json`
 -   **"Startup Check Failed"**: The app could not connect to InfluxDB or write to the `DATA_PATH`. Check network connectivity or file permissions.
 -   **Connection Refused**: Ensure the Homewizzard device is reachable on the local network and the Local API is enabled in the Homewizzard Energy App.
 
+##
+All the code was created with Antigravity and by Gemini 3 Pro (High). Pretty impressive!
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
