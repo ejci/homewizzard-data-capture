@@ -9,6 +9,7 @@ A robust Node.js application to capture energy, water, and gas consumption data 
 -   **Dual Storage Backends**:
     -   **InfluxDB (v2)**: Seamless integration for time-series visualization (Grafana, InfluxDB UI).
     -   **Local File Storage**: Saves raw JSON data locally if InfluxDB is not needed.
+-   **Structured Logging**: Newline-delimited JSON logs via [Pino](https://getpino.io/), ready for Loki ingestion.
 -   **Robust Error Handling**:
     -   Startup connectivity checks for storage backends.
     -   Clear, human-readable configuration errors.
@@ -21,10 +22,11 @@ A robust Node.js application to capture energy, water, and gas consumption data 
 The application is configured via environment variables. Create a `.env` file in the root directory.
 
 ### Common Configuration
-| Variable | Desctiption | Required | Default |
+| Variable | Description | Required | Default |
 | :--- | :--- | :--- | :--- |
 | `DEVICES` | Comma-separated list of Device IPs or Hostnames (e.g. `192.168.1.10,homewizzard-p1`) | **Yes** | |
 | `POLL_INTERVAL` | Polling frequency in milliseconds | No | `5000` |
+| `HOMEWIZZARD_LOG_LEVEL` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` | No | `info` |
 
 ### Storage Option 1: InfluxDB (Primary)
 If these variables are set, the application will use InfluxDB.
@@ -88,6 +90,28 @@ If InfluxDB variables are **not** set, the application will check for `DATA_PATH
     node app.js
     ```
 
+3.  **Pretty-print logs during development** (requires `pino-pretty`):
+    ```bash
+    node app.js | npx pino-pretty
+    ```
+
+## Logging & Loki
+
+All logs are emitted as newline-delimited JSON to stdout:
+
+```json
+{"level":30,"time":"2026-02-21T14:51:18.985Z","service":"homewizzard-data-capture","msg":"Starting Homewizzard Data Capture..."}
+{"level":50,"time":"2026-02-21T14:51:20.123Z","service":"homewizzard-data-capture","device":"192.168.1.10","err":"ECONNREFUSED","msg":"Failed to poll device"}
+```
+
+Each line carries `"service": "homewizzard-data-capture"`, making it straightforward to create label filters in Promtail/Alloy:
+
+```
+{service="homewizzard-data-capture"}
+```
+
+Set the log level via the `HOMEWIZZARD_LOG_LEVEL` environment variable.
+
 ## Data Format
 
 ### InfluxDB
@@ -109,6 +133,15 @@ Files are saved in: `<DATA_PATH>/<product_type>/<timestamp>_<device_ip>.json`
   }
 }
 ```
+
+## Project Structure
+
+- `app.js` — Main entry point and orchestration.
+- `config.js` — Configuration management and validation.
+- `logger.js` — Shared Pino logger instance.
+- `homewizzard.js` — Homewizzard local API client.
+- `influx.js` — InfluxDB connection handling and data writing.
+- `file_storage.js` — Local JSON file storage backend.
 
 ## Troubleshooting
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
 const config = require('./config');
 
 const dataPath = config.dataPath;
@@ -9,21 +10,21 @@ if (dataPath && !fs.existsSync(dataPath)) {
     try {
         fs.mkdirSync(dataPath, { recursive: true });
     } catch (err) {
-        console.error(new Date().toISOString(), `Error creating base data path ${dataPath}:`, err);
+        logger.error({ dataPath, err: err.message }, 'Error creating base data path');
     }
 }
 
 async function checkConnection() {
     if (!dataPath) {
-        console.error(new Date().toISOString(), 'Data Path not configured.');
+        logger.error('Data Path not configured');
         return false;
     }
     try {
         await fs.promises.access(dataPath, fs.constants.W_OK);
-        console.log(new Date().toISOString(), `Local storage is writable at ${dataPath}`);
+        logger.info({ dataPath }, 'Local storage is writable');
         return true;
     } catch (error) {
-        console.error(new Date().toISOString(), `FAILED to write to local data path ${dataPath}: ${error.message}`);
+        logger.warn({ dataPath, err: error.message }, 'Failed to write to local data path');
         return false;
     }
 }
@@ -31,28 +32,25 @@ async function checkConnection() {
 function writeMeasurement(deviceIp, data, deviceInfo = {}) {
     if (!dataPath) return;
 
-    // Use product type for folder structure, sanitize it
     const productType = (deviceInfo.product_type || 'unknown_device').replace(/[^a-z0-9_-]/gi, '_');
     const deviceDir = path.join(dataPath, productType);
 
-    // Ensure device directory exists
     if (!fs.existsSync(deviceDir)) {
         try {
             fs.mkdirSync(deviceDir, { recursive: true });
         } catch (err) {
-            console.error(new Date().toISOString(), `Error creating directory ${deviceDir}:`, err);
+            logger.error({ deviceDir, err: err.message }, 'Error creating device directory');
             return;
         }
     }
 
     const timestamp = new Date().toISOString();
-    // Sanitize timestamp for filename
     const filenameTime = timestamp.replace(/:/g, '-');
     const filename = `${filenameTime}_${deviceIp}.json`;
     const filePath = path.join(deviceDir, filename);
 
     const payload = {
-        timestamp: timestamp,
+        timestamp,
         device_ip: deviceIp,
         device_info: deviceInfo,
         measurements: data
@@ -60,22 +58,20 @@ function writeMeasurement(deviceIp, data, deviceInfo = {}) {
 
     fs.writeFile(filePath, JSON.stringify(payload, null, 2), (err) => {
         if (err) {
-            console.error(new Date().toISOString(), `Error writing file ${filePath}:`, err);
-        } else {
-            // console.log(new Date().toISOString(), `Wrote data to ${filePath}`);
+            logger.error({ filePath, err: err.message }, 'Error writing measurement file');
         }
     });
 }
 
-function logError(errorContext, error) {
+function logError(context, error) {
     if (!dataPath) return;
 
     const logFile = path.join(dataPath, 'errors.log');
-    const logEntry = `${new Date().toISOString()} [${errorContext}] ${error.message || error}\n`;
+    const logEntry = `${new Date().toISOString()} [${context}] ${error.message || error}\n`;
 
     fs.appendFile(logFile, logEntry, (err) => {
         if (err) {
-            console.error(new Date().toISOString(), `Error writing to error log ${logFile}:`, err);
+            logger.error({ logFile, err: err.message }, 'Error writing to error log');
         }
     });
 }

@@ -1,4 +1,4 @@
-require('dotenv').config();
+const logger = require('./logger');
 
 const requiredEnvsCommon = ['DEVICES'];
 const requiredEnvsInflux = ['INFLUX_URL', 'INFLUX_TOKEN', 'INFLUX_ORG', 'INFLUX_BUCKET'];
@@ -6,11 +6,7 @@ const requiredEnvsInflux = ['INFLUX_URL', 'INFLUX_TOKEN', 'INFLUX_ORG', 'INFLUX_
 function validateConfig() {
     const missingCommon = requiredEnvsCommon.filter(key => !process.env[key]);
     if (missingCommon.length > 0) {
-        console.error('\n================ CONFIGURATION ERROR ================');
-        console.error(` The following required environment variables are missing:`);
-        missingCommon.forEach(key => console.error(`  - ${key}`));
-        console.error(' Please update your .env file or environment variables.');
-        console.error('=====================================================\n');
+        logger.error({ missingVars: missingCommon }, 'Missing required environment variables');
         process.exit(1);
     }
 
@@ -18,12 +14,10 @@ function validateConfig() {
     const hasDataPath = !!process.env.DATA_PATH;
 
     if (!hasInflux && !hasDataPath) {
-        console.error('\n================ CONFIGURATION ERROR ================');
-        console.error(' Storage backend not configured.');
-        console.error(' You must provide either:');
-        console.error('  1. InfluxDB configuration (INFLUX_URL, INFLUX_TOKEN, etc.)');
-        console.error('  2. Local File Storage path (DATA_PATH)');
-        console.error('=====================================================\n');
+        logger.error(
+            { requiredInfluxVars: requiredEnvsInflux, dataPathVar: 'DATA_PATH' },
+            'Storage backend not configured. Provide InfluxDB variables or DATA_PATH.'
+        );
         process.exit(1);
     }
 }
@@ -41,8 +35,5 @@ module.exports = {
         bucket: process.env.INFLUX_BUCKET,
         errorBucket: process.env.INFLUX_ERROR_BUCKET || process.env.INFLUX_BUCKET
     },
-    // storageType: Detect based on config. prioritizing Influx if both present? 
-    // User requested: "if influxdb env variables are not set it will write data to data folder".
-    // So if influx is fully set, use it. Else use file.
     useInflux: requiredEnvsInflux.every(key => process.env[key])
 };

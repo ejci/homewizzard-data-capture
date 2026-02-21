@@ -1,24 +1,28 @@
+const logger = require('./logger');
 const config = require('./config');
 const influx = require('./influx');
 const fileStorage = require('./file_storage');
 const homewizzard = require('./homewizzard');
 
-console.log(new Date().toISOString(), 'Starting Homewizzard Data Capture...');
-console.log(new Date().toISOString(), `Polling interval: ${config.pollInterval}ms`);
-console.log(new Date().toISOString(), `Devices to poll: ${config.devices.join(', ')}`);
+logger.info({ pollInterval: config.pollInterval, devices: config.devices }, 'Starting Homewizzard Data Capture...');
 
 // Select storage provider
 const storage = config.useInflux ? influx : fileStorage;
-console.log(new Date().toISOString(), `Using storage provider: ${config.useInflux ? 'InfluxDB' : 'Local File Storage'}`);
+logger.info({ storageProvider: config.useInflux ? 'InfluxDB' : 'Local File Storage' }, 'Storage provider selected');
 
 // Perform startup checks
 (async () => {
     const connected = await storage.checkConnection();
     if (!connected) {
-        console.error(new Date().toISOString(), `Startup Check Failed: ${config.useInflux ? 'InfluxDB' : 'File Storage'} is not reachable/writable.`);
-        // We continue, as per requirements "recover from issues", but the logs are now clear.
+        logger.warn(
+            { storageProvider: config.useInflux ? 'InfluxDB' : 'File Storage' },
+            'Startup Check Failed: storage is not reachable/writable'
+        );
     } else {
-        console.log(new Date().toISOString(), `Startup Check Passed: ${config.useInflux ? 'InfluxDB' : 'File Storage'} is ready.`);
+        logger.info(
+            { storageProvider: config.useInflux ? 'InfluxDB' : 'File Storage' },
+            'Startup Check Passed: storage is ready'
+        );
     }
 })();
 
@@ -32,54 +36,43 @@ async function getDeviceInfo(deviceIp) {
     try {
         const info = await homewizzard.getDevice(deviceIp);
         deviceCache[deviceIp] = info;
-        console.log(new Date().toISOString(), `Discovered device at ${deviceIp}: ${info.product_name} (${info.product_type})`);
+        logger.info({ device: deviceIp, productName: info.product_name, productType: info.product_type }, 'Device discovered');
         return info;
     } catch (error) {
-        console.error(new Date().toISOString(), `Failed to get device info for ${deviceIp}: ${error.message}`);
-        // Return a minimal object if fetch fails so we can still try to log data
+        logger.warn({ device: deviceIp, err: error.message }, 'Failed to get device info');
         return { product_name: 'Unknown', product_type: 'unknown' };
     }
 }
 
 async function pollDevice(device) {
     try {
-        // Ensure we have device info (tried at startup, but retry if needed or getting cached)
         const deviceInfo = await getDeviceInfo(device);
-
         const data = await homewizzard.getData(device);
         storage.writeMeasurement(device, data, deviceInfo);
-        console.log(new Date().toISOString(), `Data pushed for ${device}`);
-        // Optional: console.log(`Data pushed for ${device}`);
+        logger.info({ device }, 'Data pushed');
     } catch (error) {
-        console.error(new Date().toISOString(), `Failed to poll ${device}: ${error.message}`);
+        logger.error({ device, err: error.message }, 'Failed to poll device');
         storage.logError(`Polling ${device}`, error);
     }
 }
 
 // Start polling for each device
 config.devices.forEach(async device => {
-    // Try to pre-fetch device info to have it ready
     await getDeviceInfo(device);
-
-    // Initial poll immediately
     pollDevice(device);
-
-    // Set interval
     setInterval(() => {
         pollDevice(device);
     }, config.pollInterval);
 });
 
-// Handle generic process errors to try and keep alive or at least log them
+// Handle generic process errors
 process.on('uncaughtException', (error) => {
-    console.error(new Date().toISOString(), 'Uncaught Exception:', error);
+    logger.error({ err: error.message, stack: error.stack }, 'Uncaught Exception');
     storage.logError('Uncaught Exception', error);
-    // Depending on severity, we might want to exit, but requirements say "recover and continue".
-    // For uncaught exceptions it is usually safer to restart (Docker will handle restart).
-    // process.exit(1); 
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error(new Date().toISOString(), 'Unhandled Rejection at:', promise, 'reason:', reason);
-    storage.logError('Unhandled Rejection', reason instanceof Error ? reason : new Error(String(reason)));
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error({ err: err.message, stack: err.stack }, 'Unhandled Rejection');
+    storage.logError('Unhandled Rejection', err);
 });
