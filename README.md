@@ -24,8 +24,8 @@ The application is configured via environment variables. Create a `.env` file in
 ### Common Configuration
 | Variable | Description | Required | Default |
 | :--- | :--- | :--- | :--- |
-| `DEVICES` | Comma-separated list of Device IPs or Hostnames (e.g. `192.168.1.10,homewizzard-p1`) | **Yes** | |
-| `POLL_INTERVAL` | Polling frequency in milliseconds | No | `5000` |
+| `HOMEWIZZARD_DEVICES` | Comma-separated list of Device IPs or Hostnames (e.g. `192.168.1.10,homewizzard-p1`) | **Yes** | |
+| `HOMEWIZZARD_POLL_INTERVAL` | Polling frequency in milliseconds | No | `5000` |
 | `HOMEWIZZARD_LOG_LEVEL` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` | No | `info` |
 
 ### Storage Option 1: InfluxDB (Primary)
@@ -44,9 +44,9 @@ If InfluxDB variables are **not** set, the application will check for `DATA_PATH
 
 | Variable | Description | Required (for Local) |
 | :--- | :--- | :--- |
-| `DATA_PATH` | Local directory path to save JSON files (e.g. `./data`) | **Yes** |
+| `HOMEWIZZARD_DATA_PATH` | Local directory path to save JSON files (e.g. `./data`) | **Yes** |
 
-*> Note: The application requires either InfluxDB configuration OR a `DATA_PATH` to start.*
+*> Note: The application requires either InfluxDB configuration OR a `HOMEWIZZARD_DATA_PATH` to start.*
 
 ## Running the Application
 
@@ -76,7 +76,7 @@ If InfluxDB variables are **not** set, the application will check for `DATA_PATH
       --restart unless-stopped \
       homewizzard-capture
     ```
-    *(Ensure your `.env` has `DATA_PATH=/app/data`)*
+    *(Ensure your `.env` has `HOMEWIZZARD_DATA_PATH=/app/data`)*
 
 ### Running Locally (Node.js)
 
