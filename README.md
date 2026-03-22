@@ -87,13 +87,21 @@ If InfluxDB variables are **not** set, the application will check for `DATA_PATH
 
 2.  **Start the App**:
     ```bash
-    node app.js
+    node src/index.js
     ```
 
 3.  **Pretty-print logs during development** (requires `pino-pretty`):
     ```bash
-    node app.js | npx pino-pretty
+    node src/index.js | npx pino-pretty
     ```
+
+### Running Tests
+
+The application uses [Jest](https://jestjs.io/) for automated unit testing. To run the tests and generate a coverage report:
+
+```bash
+npm run test
+```
 
 ## Logging & Loki
 
@@ -136,12 +144,13 @@ Files are saved in: `<DATA_PATH>/<product_type>/<timestamp>_<device_ip>.json`
 
 ## Project Structure
 
-- `app.js` — Main entry point and orchestration.
-- `config.js` — Configuration management and validation.
-- `logger.js` — Shared Pino logger instance.
-- `homewizzard.js` — Homewizzard local API client.
-- `influx.js` — InfluxDB connection handling and data writing.
-- `file_storage.js` — Local JSON file storage backend.
+- `src/index.js` — Main process entry point.
+- `src/app.js` — Core orchestrator and execution loops.
+- `src/config/index.js` — Configuration loader and validation.
+- `src/utils/logger.js` — Shared localized Pino logger stream.
+- `src/services/homewizzard.js` — Wi-Fi interface client for target devices.
+- `src/storage/influx.js` — InfluxDB point generator and cache flush driver.
+- `src/storage/file_storage.js` — Local `.json` storage fallback behavior.
 
 ## Troubleshooting
 

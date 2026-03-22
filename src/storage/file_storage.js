@@ -1,11 +1,17 @@
+/**
+ * @fileoverview Local JSON file storage backend.
+ * Provides a reliable fallback storage method when InfluxDB is disabled or unreachable.
+ * @module storage/file_storage
+ */
+
 const fs = require('fs');
 const path = require('path');
-const logger = require('./logger');
-const config = require('./config');
+const logger = require('../utils/logger');
+const config = require('../config');
 
 const dataPath = config.dataPath;
 
-// Ensure base data directory exists
+// Ensure base data directory exists gracefully on cold start
 if (dataPath && !fs.existsSync(dataPath)) {
     try {
         fs.mkdirSync(dataPath, { recursive: true });
@@ -14,6 +20,11 @@ if (dataPath && !fs.existsSync(dataPath)) {
     }
 }
 
+/**
+ * Validates the local file system write access.
+ * 
+ * @returns {Promise<boolean>} True if directory is writable, false otherwise.
+ */
 async function checkConnection() {
     if (!dataPath) {
         logger.error('Data Path not configured');
@@ -29,12 +40,22 @@ async function checkConnection() {
     }
 }
 
+/**
+ * Writes raw device measurement data to a dynamically structured JSON file mapping.
+ * Organizes files by product type (e.g. ./data/p1_meter/2026-....json).
+ * 
+ * @param {string} deviceIp - The source IP of the hardware device.
+ * @param {Object} data - The raw JSON measurement payload.
+ * @param {Object} [deviceInfo={}] - Meta payload describing product details.
+ */
 function writeMeasurement(deviceIp, data, deviceInfo = {}) {
     if (!dataPath) return;
 
+    // Sanitize string for localized filesystem usage
     const productType = (deviceInfo.product_type || 'unknown_device').replace(/[^a-z0-9_-]/gi, '_');
     const deviceDir = path.join(dataPath, productType);
 
+    // Create intermediate directories dynamically if handling diverse device portfolios
     if (!fs.existsSync(deviceDir)) {
         try {
             fs.mkdirSync(deviceDir, { recursive: true });
@@ -56,6 +77,7 @@ function writeMeasurement(deviceIp, data, deviceInfo = {}) {
         measurements: data
     };
 
+    // Serialize and write asynchronously to avoid blocking the Event Loop
     fs.writeFile(filePath, JSON.stringify(payload, null, 2), (err) => {
         if (err) {
             logger.error({ filePath, err: err.message }, 'Error writing measurement file');
@@ -63,6 +85,12 @@ function writeMeasurement(deviceIp, data, deviceInfo = {}) {
     });
 }
 
+/**
+ * Appends application execution errors to a local `errors.log` file.
+ * 
+ * @param {string} context - Source of the error.
+ * @param {Error|string} error - The caught Error object.
+ */
 function logError(context, error) {
     if (!dataPath) return;
 

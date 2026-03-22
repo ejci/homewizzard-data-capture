@@ -1,18 +1,31 @@
+/**
+ * @fileoverview Storage wrapper for InfluxDB v2.
+ * Responsible for constructing connection interfaces, checking cluster health, 
+ * mapping Homewizzard JSON directly into Influx Points, and flushing to the backend.
+ * @module storage/influx
+ */
+
 const { InfluxDB, Point } = require('@influxdata/influxdb-client');
 const { PingAPI } = require('@influxdata/influxdb-client-apis');
-const logger = require('./logger');
-const config = require('./config');
+const logger = require('../utils/logger');
+const config = require('../config');
 
 let client;
 let writeApi;
 let errorWriteApi;
 
+// Initialize clients if InfluxDB is enabled in the configuration
 if (config.influx.url) {
     client = new InfluxDB({ url: config.influx.url, token: config.influx.token });
     writeApi = client.getWriteApi(config.influx.org, config.influx.bucket);
     errorWriteApi = client.getWriteApi(config.influx.org, config.influx.errorBucket);
 }
 
+/**
+ * Verifies connectivity to the InfluxDB cluster using the Ping endpoint.
+ * 
+ * @returns {Promise<boolean>} True if reachable, false otherwise.
+ */
 async function checkConnection() {
     if (!client) return false;
 
@@ -27,6 +40,7 @@ async function checkConnection() {
     }
 }
 
+// Ensure clean connection closure when the application shuts down gracefully
 process.on('exit', () => {
     if (writeApi) {
         writeApi.close().then(() => {
@@ -38,9 +52,18 @@ process.on('exit', () => {
     }
 });
 
+/**
+ * Transforms generic device measurement attributes into InfluxDB Points
+ * and buffers them to the write API.
+ * 
+ * @param {string} deviceIp - The source IP of the hardware device.
+ * @param {Object} data - The unstructured JSON mapping of power/water parameters.
+ * @param {Object} [deviceInfo={}] - Meta payload describing product_type and name.
+ */
 function writeMeasurement(deviceIp, data, deviceInfo = {}) {
     if (!writeApi) return;
 
+    // We use the product type as the base measurement name (e.g. 'p1_meter', 'energy_socket')
     const measurementName = deviceInfo.product_type || 'homewizzard_device';
 
     const point = new Point(measurementName)
@@ -48,12 +71,15 @@ function writeMeasurement(deviceIp, data, deviceInfo = {}) {
         .tag('product_name', deviceInfo.product_name || 'unknown')
         .tag('product_type', deviceInfo.product_type || 'unknown');
 
+    // Dynamically iterate payload to preserve schema adaptability
+    // This allows new Homewizzard properties to be streamed dynamically.
     for (const [key, value] of Object.entries(data)) {
         if (typeof value === 'number') {
             point.floatField(key, value);
         } else if (typeof value === 'boolean') {
             point.booleanField(key, value);
         } else if (typeof value === 'string' && key !== 'wifi_ssid') {
+            // Ignore wifi_ssid to prevent high cardinality strings, store other strings
             point.stringField(key, value);
         }
     }
@@ -61,6 +87,13 @@ function writeMeasurement(deviceIp, data, deviceInfo = {}) {
     writeApi.writePoint(point);
 }
 
+/**
+ * Logs application errors into a dedicated InfluxDB measurement.
+ * Beneficial for centralized cluster observability.
+ * 
+ * @param {string} context - Source of the error (e.g., 'Polling 192.168.1.50')
+ * @param {Error|string} error - The caught generic Error object.
+ */
 function logError(context, error) {
     logger.error({ context, err: error.message || String(error) }, 'Application error');
 
