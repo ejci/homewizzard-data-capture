@@ -18,4 +18,4 @@ RUN curl -sfS https://dotenvx.sh/install.sh | sh
 COPY . .
 
 # Run the application
-CMD ["dotenvx", "run", "--", "node", "app.js"]
+CMD ["dotenvx", "run", "--", "node", "src/index.js"]
